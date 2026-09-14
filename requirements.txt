@@ -1,0 +1,10 @@
+# Phase 0 dependencies only: environment engine + API + tests.
+# Training-stack dependencies (verl-agent, torch, etc.) get their own
+# requirements file in Phase 1, once we get there -- keeping this file
+# minimal for now means Phase 0 installs in seconds, not minutes.
+
+fastapi>=0.111.0
+uvicorn>=0.29.0
+pydantic>=2.7.0
+pytest>=8.2.0
+httpx>=0.28.1
