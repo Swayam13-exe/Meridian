@@ -1,0 +1,72 @@
+{
+    "Germany": {
+        "requires_visa": true,
+        "correct_visa": "EU Blue Card",
+        "visa_options": ["EU Blue Card", "Work Permit", "Job Seeker Visa"],
+        "requires_tax_id": true,
+        "tax_authority": "Bundeszentralamt für Steuern",
+        "requires_payroll": true,
+        "requires_local_contract": true,
+        "requires_pdpa": false,
+        "requires_shadow_payroll": false,
+        "has_income_tax": true,
+        "tax_rate_approx_pct": 42,
+        "social_security_treaty": true,
+        "data_privacy_law": "GDPR",
+        "required_documents": [
+            "passport",
+            "visa",
+            "employment_letter",
+            "work_permit"
+        ],
+        "compliance_items": ["tax_id", "payroll"],
+        "departments_required": ["HR", "Legal"],
+        "notes": "EU Blue Card preferred for skilled workers. GDPR applies."
+    },
+    "Singapore": {
+        "requires_visa": true,
+        "correct_visa": "Employment Pass",
+        "visa_options": ["Employment Pass", "S Pass", "Work Permit"],
+        "requires_tax_id": false,
+        "tax_authority": "Inland Revenue Authority of Singapore",
+        "requires_payroll": true,
+        "requires_local_contract": true,
+        "requires_pdpa": true,
+        "requires_shadow_payroll": true,
+        "has_income_tax": true,
+        "tax_rate_approx_pct": 22,
+        "social_security_treaty": false,
+        "data_privacy_law": "PDPA",
+        "required_documents": [
+            "passport",
+            "visa",
+            "employment_letter"
+        ],
+        "compliance_items": ["payroll", "pdpa", "shadow_payroll"],
+        "departments_required": ["HR", "Legal"],
+        "notes": "Employment Pass required. Shadow payroll mandatory. PDPA consent required."
+    },
+    "UAE": {
+        "requires_visa": true,
+        "correct_visa": "Employment Visa",
+        "visa_options": ["Employment Visa", "Freelance Permit"],
+        "requires_tax_id": false,
+        "tax_authority": null,
+        "requires_payroll": true,
+        "requires_local_contract": true,
+        "requires_pdpa": false,
+        "requires_shadow_payroll": false,
+        "has_income_tax": false,
+        "tax_rate_approx_pct": 0,
+        "social_security_treaty": false,
+        "data_privacy_law": "UAE PDPL",
+        "required_documents": [
+            "passport",
+            "visa",
+            "employment_letter"
+        ],
+        "compliance_items": ["payroll"],
+        "departments_required": ["HR", "Legal", "Finance"],
+        "notes": "UAE has NO income tax. set_tax_id for UAE is a rule violation. Payroll still required."
+    }
+}

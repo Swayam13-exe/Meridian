@@ -1,0 +1,29 @@
+{
+    "IN-DE": {
+        "home": "India",
+        "host": "Germany",
+        "treaty_id": "IN-DE-2011",
+        "avoids_double_tax": true,
+        "social_security": true,
+        "salary_exempt_home": false,
+        "notes": "India-Germany DTAA 2011. Prevents double taxation on salary income. Social security agreement in place."
+    },
+    "IN-SG": {
+        "home": "India",
+        "host": "Singapore",
+        "treaty_id": "IN-SG-1994",
+        "avoids_double_tax": true,
+        "social_security": false,
+        "salary_exempt_home": false,
+        "notes": "India-Singapore DTAA 1994. No social security agreement. Shadow payroll required to track home-country obligations."
+    },
+    "IN-UAE": {
+        "home": "India",
+        "host": "UAE",
+        "treaty_id": "IN-UAE-1992",
+        "avoids_double_tax": true,
+        "social_security": false,
+        "salary_exempt_home": true,
+        "notes": "India-UAE DTAA 1992. UAE has no income tax so treaty mainly governs investment income. Salary is effectively tax-free in UAE."
+    }
+}

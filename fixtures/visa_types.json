@@ -1,0 +1,66 @@
+{
+    "EU Blue Card": {
+        "country": "Germany",
+        "category": "skilled_worker",
+        "min_salary_eur": 56400,
+        "requires_degree": true,
+        "duration_years": 4,
+        "notes": "Preferred route for non-EU skilled workers in Germany. Requires degree + salary threshold."
+    },
+    "Work Permit": {
+        "country": "Germany",
+        "category": "general",
+        "min_salary_eur": 0,
+        "requires_degree": false,
+        "duration_years": 2,
+        "notes": "Fallback if EU Blue Card salary threshold not met. Less favourable for skilled roles."
+    },
+    "Job Seeker Visa": {
+        "country": "Germany",
+        "category": "job_seeker",
+        "min_salary_eur": 0,
+        "requires_degree": true,
+        "duration_years": 0.5,
+        "notes": "Wrong choice if employee already has a job offer. Triggers wrong_action penalty."
+    },
+    "Employment Pass": {
+        "country": "Singapore",
+        "category": "professional",
+        "min_salary_sgd": 5000,
+        "requires_degree": true,
+        "duration_years": 2,
+        "notes": "Correct visa for professionals, managers, executives. Required for Engineer and Manager roles."
+    },
+    "S Pass": {
+        "country": "Singapore",
+        "category": "mid_skilled",
+        "min_salary_sgd": 3000,
+        "requires_degree": false,
+        "duration_years": 2,
+        "notes": "Wrong choice for senior roles. Selecting S Pass for Engineer/Manager triggers wrong_action penalty."
+    },
+    "Work Permit": {
+        "country": "Singapore",
+        "category": "general",
+        "min_salary_sgd": 0,
+        "requires_degree": false,
+        "duration_years": 2,
+        "notes": "Not appropriate for professional roles. Triggers wrong_action penalty."
+    },
+    "Employment Visa": {
+        "country": "UAE",
+        "category": "employment",
+        "min_salary_aed": 0,
+        "requires_degree": false,
+        "duration_years": 2,
+        "notes": "Standard employment visa for UAE. No income tax obligations apply."
+    },
+    "Freelance Permit": {
+        "country": "UAE",
+        "category": "freelance",
+        "min_salary_aed": 0,
+        "requires_degree": false,
+        "duration_years": 1,
+        "notes": "Wrong choice for employed workers. Use Employment Visa instead."
+    }
+}
