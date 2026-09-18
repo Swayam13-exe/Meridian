@@ -22,7 +22,7 @@ from typing import List
 import numpy as np
 import ray
 
-from env_integration.worker import WorkforceWorker
+from training.env_integration.worker import WorkforceWorker
 
 
 class MeridianVecEnv:

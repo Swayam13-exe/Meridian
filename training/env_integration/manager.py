@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 from typing import List
 
-from env_integration.prompts import build_step_prompt
+from training.env_integration.prompts import build_step_prompt
 
 try:
     from agent_system.environments.base import EnvironmentManagerBase
