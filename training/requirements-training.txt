@@ -1,5 +1,13 @@
 # Phase 1 dependencies, kept separate from the root requirements.txt so
 # Phase 0 stays installable in seconds. More gets added here as Phase 1
-# grows (torch, verl-agent, etc.).
+# grows.
+#
+# verl-agent itself (torch, hydra-core, omegaconf, vllm, etc.) is NOT
+# listed here -- it's installed separately via its own repo:
+#   git clone https://github.com/langfengQ/verl-agent.git
+#   cd verl-agent && pip install -e .
+# That install is large and slow; do it once, on whatever machine or
+# Colab instance you're actually training on.
 
 ray>=2.9.0
+pandas>=2.0.0
