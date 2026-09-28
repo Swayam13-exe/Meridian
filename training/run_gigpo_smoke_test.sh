@@ -20,8 +20,8 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 REPO_ROOT=$(pwd)
 DATA_DIR="$HOME/data/meridian"
 
-train_data_size=4
-val_data_size=4
+train_data_size=2
+val_data_size=2
 group_size=2
 gigpo_mode="mean_std_norm"  # or "mean_norm" -- see the GiGPO paper's ablation for the tradeoff
 

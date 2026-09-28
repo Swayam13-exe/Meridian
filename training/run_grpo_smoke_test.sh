@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # training/run_grpo_smoke_test.sh
 # =================================
-# A DELIBERATELY TINY run -- 4 distinct cases x group of 2 = 8 total
+# A DELIBERATELY TINY run -- 2 distinct cases x group of 2 = 4 total
 # parallel episodes per step, 1 training step, no checkpointing. The goal
 # is not a result, it's a yes/no answer to "does the entire pipeline
 # actually execute end to end on this machine" -- model loads, LoRA
@@ -23,8 +23,8 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 REPO_ROOT=$(pwd)
 DATA_DIR="$HOME/data/meridian"
 
-train_data_size=4
-val_data_size=4
+train_data_size=2
+val_data_size=2
 group_size=2
 
 python3 training/prepare_meridian_data.py \
