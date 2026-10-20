@@ -18,7 +18,7 @@
 
 set -x
 ENGINE=${1:-vllm}
-export VLLM_ATTENTION_BACKEND=XFORMERS
+export VLLM_ATTENTION_BACKEND=TRITON_ATTN
 
 REPO_ROOT=$(pwd)
 DATA_DIR="$HOME/data/meridian"
