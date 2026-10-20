@@ -9,6 +9,10 @@
 # update happens, nothing crashes. Once this passes, the real multi-seed
 # comparison runs use the same shape with the numbers turned up.
 #
+# Uses Qwen3-0.6B, not the 1.7B planned for the real runs: this only has to
+# prove the plumbing works, and 0.6B fits a free-tier Colab T4 (12.7GB host
+# RAM, no native bf16). The real runs switch the model path back.
+#
 # Run from the Meridian repo root:
 #   bash training/run_grpo_smoke_test.sh
 #
@@ -43,7 +47,7 @@ python3 -m verl.trainer.main_ppo \
     data.filter_overlong_prompts=True \
     data.truncation='error' \
     data.return_raw_chat=True \
-    actor_rollout_ref.model.path=Qwen/Qwen3-1.7B \
+    actor_rollout_ref.model.path=Qwen/Qwen3-0.6B \
     actor_rollout_ref.model.lora_rank=32 \
     actor_rollout_ref.model.lora_alpha=32 \
     +actor_rollout_ref.model.override_config._attn_implementation=sdpa \
