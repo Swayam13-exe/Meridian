@@ -41,6 +41,7 @@ python3 -m verl.trainer.main_ppo \
     data.filter_overlong_prompts=True \
     data.truncation='error' \
     data.return_raw_chat=True \
+    +data.dataloader_num_workers=0 \
     actor_rollout_ref.model.path=Qwen/Qwen3-0.6B \
     actor_rollout_ref.model.lora_rank=32 \
     actor_rollout_ref.model.lora_alpha=32 \
@@ -81,7 +82,7 @@ python3 -m verl.trainer.main_ppo \
     algorithm.gigpo.mode=$gigpo_mode \
     env.env_name=meridian/WorkforceEnv \
     env.seed=0 \
-    env.max_steps=40 \
+    env.max_steps=8 \
     env.history_length=5 \
     env.rollout.n=$group_size \
     env.resources_per_worker.num_cpus=0.1 \
@@ -95,6 +96,6 @@ python3 -m verl.trainer.main_ppo \
     trainer.n_gpus_per_node=1 \
     trainer.nnodes=1 \
     trainer.save_freq=-1 \
-    trainer.test_freq=1 \
+    trainer.test_freq=-1 \
     trainer.total_epochs=1 \
-    trainer.val_before_train=True $@
+    trainer.val_before_train=False $@
