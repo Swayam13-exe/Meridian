@@ -15,6 +15,12 @@ Split responsibility, on purpose:
     testing it directly: no crash, a -0.3 penalty, and a clear error
     message. Duplicating that validation here would just be two places
     that can disagree about what's legal.
+
+format_action() is the reverse of the parse: it writes a move in the exact
+shape this file accepts. The prompt uses it to show the model its available
+moves and its past moves in the same form it has to answer in. It lives
+beside the parser so the two cannot drift apart; test_rendering.py checks
+that whatever format_action writes, the parser reads back unchanged.
 """
 
 from __future__ import annotations
@@ -34,6 +40,16 @@ def meridian_projection(text_actions: List[str]) -> Tuple[List[Tuple[str, str]],
         actions.append((action_type, target))
         valids.append(is_valid)
     return actions, valids
+
+
+def format_action(action_type: str, target: str = "") -> str:
+    """One move as the JSON object the model must write inside <action>...</action>:
+    {"action_type": "...", "target": "..."}.
+
+    json.dumps does the quoting, so a move whose text contains a quote or a newline
+    (the model wrote it, so it can) still comes out on ONE line and cannot add lines
+    to the prompt it is shown in."""
+    return json.dumps({"action_type": action_type, "target": target})
 
 
 def _parse_one(text: str) -> Tuple[str, str, int]:

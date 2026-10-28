@@ -40,6 +40,7 @@ import numpy as np
 
 from env.environment import WorkforceEnv
 from env.models import Action
+from training.env_integration.projection import format_action
 
 
 class MeridianVecEnv:
@@ -122,6 +123,14 @@ def _format_observation(obs: dict, first: bool = False) -> str:
     facts, no instructions -- because the *instructions* (how to respond,
     what format to use) belong in the prompt template, not repeated on
     every single step.
+
+    The one place the format does show up is the list of available moves: they
+    are written as the JSON objects the model has to reply with, not as the
+    environment's own 'action_type:target' shorthand. In the generation-only
+    pre-flight the model copied the shorthand it was shown: Qwen3-0.6B wrote it
+    instead of JSON on 60-67% of its steps, and Qwen3-1.7B put it inside
+    "action_type", so the environment rejected about 89% of its moves. Listing
+    the moves as JSON fixed both (setting nothink-json-512 in preflight_generation.py).
     """
     lines = []
     if obs.get("last_action_error"):
@@ -132,8 +141,17 @@ def _format_observation(obs: dict, first: bool = False) -> str:
     if obs.get("current_blockers"):
         lines.append("Blockers preventing finalization: " + ", ".join(obs["current_blockers"]))
 
-    lines.append("Available actions: " + ", ".join(obs.get("available_actions", [])))
+    lines.append("Available actions: " + ", ".join(_action_as_json(a) for a in obs.get("available_actions", [])))
     return "\n".join(lines)
+
+
+def _action_as_json(shorthand: str) -> str:
+    """'request_document:passport' -> {"action_type": "request_document", "target": "passport"};
+    'approve_hr' (a move with no target) -> {"action_type": "approve_hr", "target": ""}.
+    The environment names every move this way (see WorkforceEnv._get_available_actions);
+    splitting at the FIRST colon is safe because an action_type never contains one."""
+    action_type, _, target = shorthand.partition(":")
+    return format_action(action_type, target)
 
 
 def build_meridian_envs(

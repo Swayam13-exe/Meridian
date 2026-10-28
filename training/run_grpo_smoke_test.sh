@@ -18,6 +18,14 @@
 # passed end to end but took ~1h50m on a T4, and this only has to prove that
 # the code path executes.
 #
+# What the model is shown (both choices come from training/preflight_generation.py):
+#   - Qwen3's "thinking" is switched off by +data.apply_chat_template_kwargs.enable_thinking=False
+#     (the same flag verl-agent's own Qwen3 examples use). With it on, the base model spent its
+#     whole 512-token budget inside <think> on ~56-60% of steps and never reached an <action>.
+#   - The available actions and the history are written as the JSON the model has to answer
+#     with (training/env_integration/envs.py and manager.py), not as action_type:target.
+# data.max_response_length stays 512: with thinking off no reply was longer than 125 tokens.
+#
 # Run from the Meridian repo root:
 #   bash training/run_grpo_smoke_test.sh
 #
@@ -52,6 +60,7 @@ python3 -m verl.trainer.main_ppo \
     data.filter_overlong_prompts=True \
     data.truncation='error' \
     data.return_raw_chat=True \
+    +data.apply_chat_template_kwargs.enable_thinking=False \
     +data.dataloader_num_workers=0 \
     actor_rollout_ref.model.path=Qwen/Qwen3-0.6B \
     actor_rollout_ref.model.lora_rank=32 \

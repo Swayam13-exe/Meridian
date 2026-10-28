@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 from typing import List
 
+from training.env_integration.projection import format_action
 from training.env_integration.prompts import build_step_prompt
 
 try:
@@ -80,8 +81,11 @@ class MeridianEnvironmentManager(EnvironmentManagerBase):
 
         for i in range(len(infos)):
             a_type, target = actions[i]
+            # The history shows each move the way the model has to write it (see
+            # format_action), so a reply that could not be parsed reads as
+            # {"action_type": "malformed_response", "target": ""}.
             self._history[i].append({
-                "action": f"{a_type}:{target}" if target else a_type,
+                "action": format_action(a_type, target),
                 "result": text_obs[i].splitlines()[0] if text_obs[i] else "",
             })
             self._step_counts[i] += 1

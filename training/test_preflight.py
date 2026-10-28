@@ -8,7 +8,8 @@ are right, not merely that it runs:
   1. Settings reach the model as claimed (thinking switch, suffix, observation
      rewrite, token cap, temperature), and a suffix changes ONLY the end of the prompt.
   2. The format reminder's example is a real action the environment accepts, and the
-     JSON rewrite of the action lists changes nothing except those lines.
+     JSON rewrite turns the old action_type:target lists into exactly what the training
+     code now writes, touches no other line, and leaves JSON that is already there alone.
   3. "name@temperature" parses, rejects nonsense, and never edits the shared defaults.
   4. Every response lands in exactly ONE outcome (valid, cut_off, empty, ...), the
      labels follow the documented precedence, and "valid" can never disagree with
@@ -191,16 +192,24 @@ def test_settings_reach_the_generator():
         assert seen["setting"].max_tokens == tokens, f"{name}: wrong token cap {seen['setting'].max_tokens}"
         assert seen["setting"].temperature is None, f"{name}: defaults must leave the temperature to --temperature"
         assert all(("<EMPTY_THINK>" in p) == think_off for p in seen["prompts"]), f"{name}: thinking switch wrong"
-        # A suffix changes ONLY the end of the user message; with no suffix and no rewrite it is untouched.
+        # A suffix changes ONLY the end of the user message; with no suffix the observation is untouched. The one
+        # rewrite there is leaves today's observations alone, because the training code already writes JSON.
         rewritten = [rewrites[name](b) for b in baseline] if name in rewrites else baseline
-        if name in rewrites:
-            assert rewritten != baseline, f"{name}: the rewrite changed nothing"
+        assert rewritten == baseline, f"{name}: the rewrite must not change an observation that is already JSON"
         expected = [b.rstrip() + suffix for b in rewritten] if suffix else rewritten
         assert tok.user_messages() == expected, f"{name}: user message differs from the observation + its suffix"
         # Same call shape as verl-agent's rollout_loop: one user message, generation prompt on, no tokenizing.
         assert all(c["add_generation_prompt"] is True and c["tokenize"] is False for c in tok.calls)
         assert all(len(c["chat"]) == 1 and c["chat"][0]["role"] == "user" for c in tok.calls)
         assert all(c["kwargs"] == by_name[name].chat_template_kwargs for c in tok.calls), name
+
+    # Because that rewrite is a no-op on JSON, show it is really wired in: an old-style prompt (moves as
+    # action_type:target) reaches the model as JSON under nothink-json-512 and stays as it was under nothink-512.
+    old_style = to_shorthand(baseline[0])
+    assert old_style != baseline[0] and "request_document:passport" in old_style
+    plain_prompt = pf.build_chat_prompt(RecordingTokenizer(), baseline[0], by_name["nothink-512"])
+    assert pf.build_chat_prompt(RecordingTokenizer(), old_style, by_name["nothink-json-512"]) == plain_prompt
+    assert pf.build_chat_prompt(RecordingTokenizer(), old_style, by_name["nothink-512"]) != plain_prompt
 
 def test_reminder_example_is_a_real_accepted_action():
     # The example we show the model must itself be something training would accept.
@@ -231,13 +240,27 @@ def parse_json_objects(text):
             i += 2
     return found
 
-def shorthand_pair(item):
-    action_type, _, target = item.strip().partition(":")
-    return (action_type, target)
+def short_form(d):
+    """{"action_type": "approve_hr", "target": ""} -> approve_hr;  {..."request_document", "target": "visa"} -> request_document:visa"""
+    return f"{d['action_type']}:{d['target']}" if d["target"] else d["action_type"]
 
-def test_actions_as_json_rewrites_only_the_action_lists():
-    # Real observations from every task, several steps deep (so there is history to rewrite), driven by a
-    # mix of good moves, a no-target move, an unparseable reply and a well-formed nonsense move.
+def to_shorthand(prompt):
+    """The prompt as the environment used to write it: every move as action_type:target (just action_type
+    when it has no target), in the action list and in the history. A test-local inverse of what the training
+    code writes now, used to build old-style prompts."""
+    lines = []
+    for line in prompt.split("\n"):
+        history = re.fullmatch(r"(Step \d+): (\{.*\})", line)
+        if line.startswith("Available actions: "):
+            line = "Available actions: " + ", ".join(short_form(d) for d in parse_json_objects(line[len("Available actions: "):]))
+        elif history:
+            line = f"{history.group(1)}: {short_form(json.loads(history.group(2)))}"
+        lines.append(line)
+    return "\n".join(lines)
+
+def test_actions_as_json_turns_the_old_shorthand_into_what_training_writes():
+    # Real prompts from every task, several steps deep (so there is history), driven by a mix of good moves,
+    # a no-target move, an unparseable reply and a well-formed nonsense move.
     cycle = [action_text("request_document", "passport"), "no action here", action_text("approve_hr", ""),
              action_text("set_tax_id", "Germany"), action_text("dance", "")]
 
@@ -246,40 +269,40 @@ def test_actions_as_json_rewrites_only_the_action_lists():
 
     tok = RecordingTokenizer()
     run(pf.Setting("raw", 64), mixed_moves, pf.ALL_TASKS, replicas=1, max_steps=7, tokenizer=tok)
-    raw_messages = tok.user_messages()
-    assert len(raw_messages) == 4 * 7
+    prompts = tok.user_messages()
+    assert len(prompts) == 4 * 7
 
     n_history = n_untargeted = n_targeted = 0
-    for raw in raw_messages:
-        new = pf.actions_as_json(raw)
-        raw_lines, new_lines = raw.splitlines(), new.splitlines()
-        assert len(raw_lines) == len(new_lines)
-        for a, b in zip(raw_lines, new_lines):
-            if a.startswith("Available actions: "):
-                items = [x for x in a[len("Available actions: "):].split(",") if x.strip()]
-                body = b[len("Available actions: "):]
-                got = [(d["action_type"], d["target"]) for d in parse_json_objects(body)]
-                assert got == [shorthand_pair(x) for x in items], (a, b)
-                assert not re.search(r"\b[a-z_]+:[A-Za-z_]+\b", body), f"shorthand left behind: {body}"
-                for d in parse_json_objects(body):      # each rewritten action is something the model can answer with
-                    assert pf.meridian_projection([f"<action>{json.dumps(d)}</action>"])[1][0], d
+    for prompt in prompts:
+        old = to_shorthand(prompt)                        # what the environment used to write
+        assert old != prompt, "the old-style twin must differ from the real prompt, or this test proves nothing"
+        for a, b in zip(prompt.split("\n"), old.split("\n")):     # the twin differs in the two kinds of line only
+            assert a == b or a.startswith("Available actions: ") or re.match(r"Step \d+: ", a), (a, b)
+        # old style in -> exactly the prompt training writes now, and nothing else touched; JSON in -> JSON out
+        assert pf.actions_as_json(old) == prompt
+        assert pf.actions_as_json(prompt) == prompt
+        for line in prompt.split("\n"):
+            if line.startswith("Available actions: "):
+                body = line[len("Available actions: "):]
+                assert not re.search(r"\b[a-z_]+:[A-Za-z_]+\b", body), f"shorthand in the action list: {body}"
+                for d in parse_json_objects(body):        # every listed move is something the model can answer with, verbatim
+                    answer = f"<action>{json.dumps(d)}</action>"
+                    assert pf.meridian_projection([answer]) == ([(d["action_type"], d["target"])], [1]), d
                     n_untargeted += d["target"] == ""
                     n_targeted += d["target"] != ""
-            elif re.match(r"Step \d+: ", a):
-                prefix = re.match(r"(Step \d+): ", a).group(1)
-                assert b.startswith(prefix + ": "), (a, b)
-                d = json.loads(b[len(prefix) + 2:])
-                assert (d["action_type"], d["target"]) == shorthand_pair(a[len(prefix) + 2:]), (a, b)
+            elif re.match(r"Step \d+: ", line):
                 n_history += 1
-            else:
-                assert a == b, f"a line that is not an action list was changed:\n{a}\n{b}"
     assert n_history > 10 and n_untargeted > 0 and n_targeted > 0, (n_history, n_untargeted, n_targeted)
-    assert any("malformed_response" in m for m in raw_messages), "the battery should include a failed step in the history"
+    assert any("malformed_response" in p for p in prompts), "the battery should include a failed step in the history"
 
     # text without those lines passes through unchanged; an empty action list stays empty
     assert pf.actions_as_json("nothing to rewrite here\nCURRENT STEP: 3") == "nothing to rewrite here\nCURRENT STEP: 3"
     assert pf.actions_as_json("Available actions: ") == "Available actions: "
     assert pf.actions_as_json("Available actions: approve_hr") == 'Available actions: {"action_type": "approve_hr", "target": ""}'
+    # JSON is never split again: not at the commas inside a target, and not at the colon of a move glued into one field
+    already = ('Available actions: {"action_type": "request_document", "target": "a, b"}, {"action_type": "approve_hr", "target": ""}\n'
+               'Step 4: {"action_type": "request_document:visa", "target": ""}')
+    assert pf.actions_as_json(already) == already
 
 def test_select_settings():
     names = lambda spec: [s.name for s in pf.select_settings(spec)]
@@ -620,9 +643,10 @@ def test_prompt_tail_shows_what_the_model_sees():
     assert "/no_think]" in tails["softnothink-512"]
     assert pf.FORMAT_REMINDER in tails["nothink-fmt-512"] and tails["nothink-fmt-512"].endswith("<EMPTY_THINK>")
     assert pf.FORMAT_EXAMPLE in tails["nothink-ex-512"]
-    # the JSON setting shows the actions as the model must write them, and no longer in the shorthand
-    assert '{"action_type": "request_document", "target": "passport"}' in tails["nothink-json-512"]
-    assert "request_document:passport" in tails["nothink-512"] and "request_document:passport" not in tails["nothink-json-512"]
+    # every setting shows the actions the way the model must write them (JSON), not as action_type:target
+    for name, tail in tails.items():
+        assert '{"action_type": "request_document", "target": "passport"}' in tail, name
+        assert "request_document:passport" not in tail, name
 
 # ---------------------------------------------------------------------------
 # GPU and vLLM plumbing
@@ -918,7 +942,7 @@ if __name__ == "__main__":
     tests = [
         test_settings_reach_the_generator,
         test_reminder_example_is_a_real_accepted_action,
-        test_actions_as_json_rewrites_only_the_action_lists,
+        test_actions_as_json_turns_the_old_shorthand_into_what_training_writes,
         test_select_settings,
         test_taxonomy_battery,
         test_valid_label_agrees_with_the_real_projection,

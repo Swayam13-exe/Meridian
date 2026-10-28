@@ -23,18 +23,24 @@ mean what training would see:
 Only the text generator is swapped for a standalone vLLM engine.
 
 Settings (any of them can take an @temperature suffix, e.g. nothink-512@0.7):
-  think-512        Qwen3 thinking on, 512-token cap      (what the smoke tests used)
+  think-512        Qwen3 thinking on, 512-token cap      (what the first smoke tests used)
   think-1024       thinking on, 1024-token cap           (does more room fix truncation?)
   nothink-512      thinking OFF via the chat template    (training equivalent:
-                   +data.apply_chat_template_kwargs.enable_thinking=False)
+                   +data.apply_chat_template_kwargs.enable_thinking=False). This is the
+                   recipe the smoke scripts now use.
   softnothink-512  thinking off via "/no_think" in the prompt (prompt-only switch)
   nothink-fmt-512  thinking off + a one-line reminder of the answer format
   nothink-ex-512   thinking off + the same reminder with one concrete example
-  nothink-json-512 thinking off + the action list and history written as the JSON the
-                   model must answer with (the environment writes them as action_type:target)
-The two reminders are appended to the observation, after "Respond in the exact
-format above."; the JSON rewrite changes the "Available actions:" and "Step N:" lines.
-All three test a prompt change without touching prompts.py or envs.py.
+  nothink-json-512 the same prompt as nothink-512. envs.py and manager.py now write the action
+                   list and the history as the JSON the model must answer with; this setting
+                   also rewrites any action_type:target left in a prompt into JSON, so the two
+                   should agree within noise. It is the setting the recipe was chosen with:
+                   while the environment still listed action_type:target, this rewrite raised
+                   Qwen3-0.6B's valid-action rate from ~14% to ~42% and Qwen3-1.7B's success
+                   rate from ~6% to ~100%.
+Every setting sees the JSON action list. The two reminders are appended to the observation,
+after "Respond in the exact format above.", and test a prompt change without touching
+prompts.py or envs.py.
 A temperature other than 1.0 is consistent with training: verl divides the
 actor's logits by rollout.temperature too, so rollout and update see one policy.
 (top_p / top_k are deliberately NOT varied: they would make rollouts differ from
@@ -82,8 +88,8 @@ quick skim is enough, and the numbers are always printed next to them.
 Usage (on the GPU machine, from the repo root):
     python training/preflight_generation.py
     python training/preflight_generation.py --max-steps 12 --replicas 2 --settings think-512,nothink-512   # quick look
-    python training/preflight_generation.py --replicas 8 --settings nothink-512,nothink-512@0.7,nothink-fmt-512,nothink-ex-512,nothink-json-512
-    python training/preflight_generation.py --model Qwen/Qwen3-1.7B --replicas 8 --settings nothink-512,nothink-fmt-512,nothink-json-512
+    python training/preflight_generation.py --replicas 8 --settings nothink-512,nothink-512@0.7,nothink-fmt-512,nothink-ex-512
+    python training/preflight_generation.py --model Qwen/Qwen3-1.7B --replicas 8 --settings nothink-512,nothink-fmt-512
     python training/preflight_generation.py --dry-run     # no GPU/vLLM: tests the script itself
 If vLLM refuses to start, add --in-process (runs its engine inside this process,
 the way the training run does).
@@ -161,25 +167,37 @@ FORMAT_EXAMPLE = (
     '<action>{"action_type": "request_document", "target": "passport"}</action>'
 )
 
-# The environment writes actions as "action_type:target" (see _get_available_actions in
-# env/environment.py and the history in manager.py) but the model must ANSWER with JSON. The model
-# can copy the shorthand it is shown instead of the format it is asked for; this rewrite tests that.
+# The environment itself names every move "action_type:target" (see _get_available_actions in
+# env/environment.py), but the model must ANSWER with JSON, and a model copies what it is shown: with
+# the shorthand in the prompt, this pre-flight found Qwen3-0.6B writing the shorthand instead of JSON
+# and Qwen3-1.7B gluing it into "action_type". envs.py and manager.py now show the moves as JSON.
+# The rewrite below is how that fix was measured (shorthand in, JSON out, nothing else touched). It
+# leaves lines that are already JSON alone, so it can sit on top of the new prompts as a no-op.
 _ACTIONS_LINE = re.compile(r"^Available actions: (.*)$", re.M)
 _HISTORY_LINE = re.compile(r"^(Step \d+): (.*)$", re.M)
+
+def _already_json(text: str) -> bool:
+    return text.startswith("{")
 
 def _as_json_action(shorthand: str) -> str:
     action_type, _, target = shorthand.strip().partition(":")
     return json.dumps({"action_type": action_type, "target": target})
 
 def _actions_line_as_json(match) -> str:
+    if _already_json(match.group(1)):
+        return match.group(0)       # splitting JSON at its commas would cut the objects apart
     return "Available actions: " + ", ".join(_as_json_action(a) for a in match.group(1).split(",") if a.strip())
 
 def _history_line_as_json(match) -> str:
+    if _already_json(match.group(2)):
+        return match.group(0)       # partition(":") would split inside {"action_type": ...}
     return f"{match.group(1)}: {_as_json_action(match.group(2))}"
 
 def actions_as_json(obs_text: str) -> str:
-    """Rewrite the observation's action_type:target shorthand (the 'Available actions:' line and the
-    'Step N:' history lines) into the JSON the model has to write. Nothing else is touched."""
+    """Make sure the observation writes its moves as the JSON the model has to answer with: the
+    'Available actions:' line and the 'Step N:' history lines. action_type:target shorthand becomes
+    JSON; lines that are already JSON, and every other line, are left alone, so applying it to a prompt
+    that is already in JSON (today's) changes nothing, and applying it twice is the same as once."""
     obs_text = _ACTIONS_LINE.sub(_actions_line_as_json, obs_text)
     return _HISTORY_LINE.sub(_history_line_as_json, obs_text)
 
@@ -598,9 +616,11 @@ def format_report(summaries: List[dict], runs: List[dict], args_info: dict) -> s
 
     out.append("")
     out.append("HOW TO READ THIS")
-    out.append("  * Calibration (Qwen3-0.6B, think-512): the training smoke runs logged valid_action_ratio 0.10-0.125")
-    out.append("    and ~56-60% of responses cut off at the cap, from only ~32 steps each. If that row is far from")
-    out.append("    those numbers (more than ~10 points), this harness is not matching training.")
+    out.append("  * Calibration: the first smoke runs (Qwen3-0.6B, thinking on, moves listed as action_type:target) logged")
+    out.append("    valid_action_ratio 0.10-0.125 and ~56-60% of responses cut off at the cap, and this harness matched")
+    out.append("    them. The prompt is JSON now, so think-512 reads differently. The check that applies now: a smoke run")
+    out.append("    of the current scripts should log a valid_action_ratio close to the nothink-512 fmt_valid above")
+    out.append("    (a 32-step run is noisy: about +/-17 points near 40%). Far off means this harness is not matching training.")
     out.append("  * fmt_valid is the single most important column: below ~30%, most steps earn only the invalid-action penalty.")
     fewest = min((s["overall"]["steps"] for s in summaries), default=0)
     margin = noise_margin(fewest)
@@ -612,9 +632,10 @@ def format_report(summaries: List[dict], runs: List[dict], args_info: dict) -> s
     out.append("  * progress > 0 means the model is already earning milestone rewards without any training.")
     out.append("  * ep_reward is the environment's reward only; training also subtracts 0.1 per invalid action.")
     out.append("  * max_prompt above the limit in the header would crash training (data.truncation='error').")
-    out.append("  * nothink-512 maps to +data.apply_chat_template_kwargs.enable_thinking=False in the training script;")
-    out.append("    the -fmt / -ex reminders, the -json rewrite and softnothink-512 would be changes to the prompt instead")
-    out.append("    (the -json one would be made in training/env_integration/envs.py and manager.py).")
+    out.append("  * nothink-512 maps to +data.apply_chat_template_kwargs.enable_thinking=False in the training scripts;")
+    out.append("    the -fmt / -ex reminders and softnothink-512 would be changes to the prompt instead. The action list and")
+    out.append("    history are already JSON (training/env_integration/envs.py and manager.py), so nothink-json-512 should")
+    out.append("    match nothink-512 within the sampling noise.")
     return "\n".join(out)
 
 # ---------------------------------------------------------------------------
